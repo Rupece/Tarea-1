@@ -1,0 +1,522 @@
+---
+title: ''
+author: ''
+date: ''
+output:
+  pdf_document:
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, eval = TRUE, warnings = FALSE)
+```
+\newpage
+
+## 3. Contraste un modelo trivial de la determinación del salario con los datos por medio de los siguientes pasos: **[2 horas, 0.5 puntos cada inciso]**. Por favor documente su trabajo para que se pueda replicar.
+
+#### 1. Obtenga una serie del **PIB** $Y_t$ de la economía.
+\
+
+Descargamos la serie del Producto Interno Bruto (PIB) a precios constantes del 2018 del INEGI que va desde el primer trimestre de 1993 hasta el cuatro trimestre de 2025. En la gráfica 1 se muestra la serie de tiempo del PIB.
+
+```{r librerias, message=FALSE, warning=FALSE}
+library(readxl)  
+library(dplyr) 
+library(tidyr)
+library(stringr)
+library(ggplot2)
+library(kableExtra) 
+
+```
+
+```{r Formato de gráficas, message=FALSE, warning=FALSE}
+
+# Se usa una función específica para la visualización de los datos
+
+source("C:/Users/Rupec/OneDrive/Escritorio/R/graf_excel.R")
+```
+
+```{r Tratamiento de los datos del PIB, message=FALSE, warning=FALSE}
+
+# Definimos la ruta en la que vamos a trabajar
+
+ruta <- setwd("C:/Users/Rupec/OneDrive/Escritorio/ME/Segundo semestre/Macroeconomia II/1. Mercado laboral/Tarea 1") # directorio de la computadora
+
+pib_raw <- read_excel("PIB_desest_2018.xlsx",
+                       col_names = F,
+                       col_types = "text") # base del PIB a precios de 2018 del INEGI
+
+pib_raw <- pib_raw[,colSums(!is.na(pib_raw)) > 0] # borramos NAs
+
+fila_años <- 4 # Fila donde estan los años
+fila_trim <- 5 # Fila donde estan los trimestres
+fila_pib <- 6 # Fila donde estan los datos de PIB
+
+años <- unlist(pib_raw[fila_años,-1])[2:133] # Extraemos años, trimestres y PIB 
+trim <- unlist(pib_raw[fila_trim,-1])[2:133]
+pib_val <- unlist(pib_raw[fila_pib,-1])[2:133]
+
+
+trim_num <- recode(trim,
+                   "I" = "1",
+                   "II" = "2",
+                   "III" = "3",
+                   "IV" = "4") # Cambiamos los trimestres de string a numericos
+
+pib_val <- as.numeric(pib_val) # Cambiamos el PIB de string a numerico
+fecha <- paste0(años, "T", trim_num) # Creamos la variable fecha para la serie de tiempo deL PIB
+
+año_inicio <- as.numeric(años[1]) # año de inicio 
+trim_inicio <- as.numeric(trim_num[1]) # trimestre de inicio 
+
+PIB_ts <- ts(pib_val/1000,
+             start = c(año_inicio, trim_inicio),
+             frequency =  4) # Serie de tiempo PIB 1993T1 - 2025T4
+
+grafica_excel(PIB_ts,mostrar_leyenda = F, colores = "black", ancho = 8, alto = 5, y_break_by = 2000, date_breaks = "4 years", grosor_linea = 0.6, titulo = "Gráfica 1: Producto Interno Bruto, a.e.", subtitulo = "Miles de millones de pesos constantes de 2018",nota = "a.e./ serie con ajuste estacional", fuente = "Fuente: elaboración propia con datos del INEGI")
+
+```
+
+#### 2. Obtenga una serie del **capital** $K_t$ de la economía ("Índice de Volumen físico acumulado").
+\
+
+La serie del capital que se usa es el Índice del volumen del capital físico acumulado que estima el INEGI. Este indicador permite conocer el comportamiento de la inversión en el país a corto plazo. La serie abarca desde enero de 1993 hasta diciembre de 2025. En la gráfica 2 se muestra la serie de tiempo del capital.
+
+```{r Tratamiento de los datos del capital, message=FALSE, warning=FALSE}
+cap_raw <- read_excel("Capital_base_2018.xlsx",
+                      col_names = F,
+                      col_types = "text") # base del Indice de capital fisico base 2018 del INEGI
+
+cap_raw <- cap_raw[,colSums(!is.na(cap_raw))>0] # borramos NAs
+
+fila_años_c <- 5 # Fila donde estan los años
+fila_mes <- 6 # Fila donde estan los trimestres
+fila_cap <- 78 # Fila donde estan los datos del Indice de volumen fisico acumulado
+                  # La serie de Por tipo de bien y origen y por tipo de bien y comprador son exactamente las mismas. Por tanto, se pueden usar indistintamente
+
+años_c <- unlist(cap_raw[fila_años_c,-1])[2:396] # Extraemos años, meses y Capital 
+meses <- unlist(cap_raw[fila_mes,-1])[2:396]
+cap_val <- unlist(cap_raw[fila_cap,-1])[2:396]
+
+cap_val <- as.numeric(cap_val) # Cambiamos el Capital de string a numerico 
+
+mes_num <- recode(meses,
+                  "Enero" = 1,
+                  "Febrero" = 2,
+                  "Marzo" = 3,
+                  "Abril" = 4,
+                  "Mayo" = 5,
+                  "Junio" = 6,
+                  "Julio" = 7,
+                  "Agosto" = 8,
+                  "Septiembre" = 9,
+                  "Octubre" = 10,
+                  "Noviembre" = 11,
+                  "Diciembre" = 12) # Convertir meses a número
+fecha_mensual <- as.yearmon(paste(años_c, mes_num), "%Y %m") # Convertir meses a variable de fecha
+cap_mensual <- zoo(cap_val, order.by = fecha_mensual) # Serie mensual del Capital
+
+cap_trim <- aggregate(cap_mensual,
+                                as.yearqtr,
+                                mean) # Promedio por mes trimestre del Capital
+
+fechas_q <- format(index(cap_trim), "%YQ%q") # Formato de trimestre
+fechas_q <- gsub("Q", "T", fechas_q)
+
+año_inicio <- as.numeric(substr(fechas_q[1], 1, 4)) # año de inicio
+trim_inicio <- as.numeric(substr(fechas_q[1], 6, 6)) # trimestre de inicio
+
+Capital_ts <- ts(as.numeric(cap_trim),
+                 start = c(año_inicio, trim_inicio),
+                 frequency = 4) # Creamos la serie de tiempo del Indice de volumen de capital fisico acumulado base 2018 1993T1-2025T4
+
+grafica_excel(Capital_ts,mostrar_leyenda = F, colores = "red",y_break_by = 11,ancho = 8, alto = 5, date_breaks = "4 years", grosor_linea = 0.6, titulo = "Gráfica 2: Volumen del capital físico acumulado", subtitulo = "Índice 2018 = 100", fuente = "Fuente: elaboración propia con datos del INEGI")
+
+```
+
+#### 3. Obtenga una serie del **empleo** $L_t$ de la economía.
+\
+
+Para el empleo, se utiliza la serie de la población económicamente activa ocupada del INEGI. La serie de tiempo, mostrada en la gráfica 3, va desde el primer trimestre de 2005 hasta el cuarto trimestre de 2025.
+
+```{r Tratamiento de los datos del empleo, message=FALSE, warning=FALSE}
+
+emp_raw <- read_excel("Pob_ocupada.xls",
+                      col_names = F,
+                      col_types = "text") # base de la poblacion ocupada del INEGI
+
+emp_raw <- emp_raw[,colSums(!is.na(emp_raw)) > 0] # borramos NAs
+
+fila_años_e <- 6 # Fila donde estan los años
+fila_trim_e <- 7 # Fila donde estan los trimestres
+fila_empleo <- 8 # Fila donde estan los datos del empleo
+
+años_e <- unlist(emp_raw[fila_años_e,-1])[2:85] # Extraemos años, trimestres y empleo 
+trim_e <- unlist(emp_raw[fila_trim_e,-1])[2:85]
+emp_val <- unlist(emp_raw[fila_empleo,-1])[2:85]
+
+trim_num_e <- recode(trim_e,
+                   "I" = "1",
+                   "II" = "2",
+                   "III" = "3",
+                   "IV" = "4") # Cambiamos los trimestres de string a numericos
+
+emp_val <- as.numeric(emp_val) # Cambiamos el empleo de string a numerico
+fecha_e <- paste0(años_e, "T", trim_num_e) # Creamos la variable fecha para la serie de tiempo deL PIB
+
+año_inicio_e <- as.numeric(años_e[1]) # año de inicio 
+trim_inicio_e <- as.numeric(trim_num_e[1]) # trimestre de inicio 
+
+Empleo_ts <- ts(emp_val/1000,
+             start = c(año_inicio_e, trim_inicio_e),
+             frequency =  4) # Serie de tiempo de la poblacion economicamente activa ocupada 2005T1 - 2025T4
+
+grafica_excel(Empleo_ts,mostrar_leyenda = F, colores = "blue",y_break_by = 2000,ancho = 8, alto = 5,date_breaks = "2 years", grosor_linea = 0.6, titulo = "Gráfica 3: Población ocupada", subtitulo = "Miles de personas", fuente = "Fuente: elaboración propia con datos del INEGI")
+
+```
+
+#### 4. Cree una serie de la **productividad** $A_t$ de la economía a partir de asumir una función de producción
+
+$Y_t = A_t F(K,L)$, con $F(K,L)=K^{0.7}L^{0.3}$.
+
+Para poder utilizar las series en conjunto, es necesario que las tres tengan la misma medida. El PIB esta medido en miles de millones de pesos del 2018, mientras que la serie del empleo esta medida en miles de personas. Por su parte, la serie del capital es un índice base 2018. Así, para homogeneizar las tres series y que sean comparables para realizar estimaciones, convertimos la serie del PIB y el empleo en índices al primer trimestre del 2018. En cuanto a su periodicidad, la serie del empleo es la serie mas corta, yendo desde el primer trimestre de 2005 hasta el cuarto trimestre de 2025. Por tanto, las estimaciones abarcan este periodo de tiempo. La gráfica 3 muestra los índices de las tres series.
+
+```{r Procesamiento de los datos de las tres series, message=FALSE, warning=FALSE}
+
+base_pib    <- window(PIB_ts, start = c(2018,1), end = c(2018,1))
+base_empleo <- window(Empleo_ts, start = c(2018,1), end = c(2018,1))
+base_capital <- window(Capital_ts, start = c(2018,1), end = c(2018,1)) # Escogemos el valor base de cada serie del primer trimestre del 2018
+
+pib_indice <- (PIB_ts / as.numeric(base_pib)) * 100
+empleo_indice <- (Empleo_ts / as.numeric(base_empleo)) * 100
+capital_indice <- (Capital_ts / as.numeric(base_capital)) * 100 # Creamos las series de tiempo de cada variable en indices
+
+series_indice <- cbind(
+  PIB      = pib_indice,
+  Empleo   = empleo_indice,
+  Capital  = capital_indice
+) %>% na.omit(series_indice) # Creamos el dataframe con las tres series en indices 
+
+grafica_excel(series_indice[,1:3],mostrar_leyenda = T, colores = c("red","blue","#2CA02C"),y_break_by = 5,date_breaks = "2 years", grosor_linea = 0.6, titulo = "Gráfica 4: PIB, empleo y capital",subtitulo = "Índice 2018-IT = 100", fuente = "Fuente: elaboración propia con datos del INEGI")
+
+```
+
+De este modo, suponiendo que el proceso generador de datos del PIB para México es $Y_t = A_t F(K,L)$, con $F(K,L)=K^{0.7}L^{0.3}$, entonces podemos estimar, de forma determinista, la Productividad Total de los Factores, $A_t$ como:
+
+$$ A_t = \frac{Y_t}{K^{0.7}L^{0.3}}  $$
+
+```{r Estimacion de la tecnologia, message=FALSE, warning=FALSE}
+
+series_indice <- cbind(
+  PIB     = series_indice[, "PIB"],
+  Empleo  = series_indice[, "Empleo"],
+  Capital = series_indice[, "Capital"],
+  TFP     = series_indice[, "PIB"] /
+    (series_indice[, "Capital"]^0.7 *
+       series_indice[, "Empleo"]^0.3)*100
+) # Estimacion deterministica de la productividad total de los factores 
+
+grafica_excel(series_indice[,4],mostrar_leyenda = F, colores = "black",ancho = 8, alto = 5,date_breaks = "2 years", grosor_linea = 0.6, titulo = "Gráfica 5: Productividad total de los factores",subtitulo = "Índice 2018-1T = 100", fuente = "Fuente: estimación propia con datos del INEGI")
+
+```
+
+#### 5. Cree una serie **contrafactual** del salario que se debió de haber observado si el salario fuera el **ingreso marginal del trabajo** 
+$A_t F_L(K_t, L_t)$.
+
+En un entorno competitivo, sin fricciones laborales ni de información, las empresas que desean contratar a $L_t$ personas y comprar $K_t$ unidades de capital, resuelven un problema de optimización como el siguiente:
+
+$$\underset{(K_t,L_t) \in \mathbb{R}_+}{Max.} \quad \Pi_t=A_tK^{0.7}L^{0.3}-wL-rK$$
+en donde la condición de primer orden con respecto al trabajo es igual a:
+
+$$\frac{\partial \Pi_t}{\partial L_t} = 0.3A_tK^{0.7}L^{-0.7} = w$$
+que implica que el salario real es igual al producto marginal del trabajo.
+
+De esta forma, podemos construir una serie del salario walrasiano que se debería de observar en México si viviéramos en un entorno competitivo. 
+
+```{r Estimacion del salario walrasiano, message=FALSE, warning=FALSE}
+
+series_indice <- cbind(
+  PIB     = series_indice[, "PIB"],
+  Empleo  = series_indice[, "Empleo"],
+  Capital = series_indice[, "Capital"],
+  TFP = series_indice[, "TFP"],
+  "Salario walrasiano" = 0.3*series_indice[,"TFP"]*
+    series_indice[, "Capital"]^(0.7)*
+    series_indice[, "Empleo"]^(-0.7)
+  ) # Estimacion deterministica del salario walrasiano 
+
+grafica_excel(series_indice[,5],mostrar_leyenda = F,y_break_by = 1, colores =  "blue",ancho = 8, alto = 5,date_breaks = "2 years", grosor_linea = 0.6, titulo = "Gráfica 6: Salario walrasiano", fuente = "Fuente: estimación propia con datos del INEGI")
+
+```
+
+La gráfica 6 muestra el salario contrafactual estimado. Observamos que el salario walrasiano tiene ciclos notorios, a comparación del salario real observado. Con base en esta estimación determinista, el salario real debió de haber caído a raíz de la crisis financiera del 2008, que causo una recesión global. Posteriormente, este efecto se disipo gradualmente hasta llegar a niveles previos a la crisis. De igual forma, a causa de la crisis económica causada por la pandemia por covid-19, el salario real debió de haber caído y, en contraste con el efecto de la crisis del 2008, la pandemia causa un cambio estructural, causando una caída permanente del salario real.   
+
+#### 6. Compare el salario observado con el salario contrafactual a la luz de los hechos estilizados y las teorías descritas en clase.
+\
+
+La comparación del salario observado con el salario contrafactual se hace usando el Índice global de remuneraciones medias reales de los sectores económicos, usado en el ejercicio 2.
+
+```{r Salario real, message=FALSE, warning=FALSE}
+
+salario_raw <- read_excel("Salario_real_base_2018.xlsx",
+                      col_names = F,
+                      col_types = "text")[7:223,] # base del Indice de remuneraciones reales del INEGI
+
+salario_raw <- salario_raw[,colSums(!is.na(salario_raw))>0]
+
+col_años_s <- 1 # Columna donde estan los años
+col_meses_s <- 2 # Columna donde estan los meses
+col_salario <- 3 # Columna donde estan los datos del Indice de volumen fisico acumulado
+
+años_s <- unlist(salario_raw[-1,col_años_s])[1:216] # Extraemos años, meses y salario real
+meses_s <- unlist(salario_raw[-1,col_meses_s])[1:216]
+salario_val <- unlist(salario_raw[-1,col_salario])[1:216]
+
+salario_val <- as.numeric(salario_val) # Cambiamos el Salario de string a numerico
+
+mes_num_s <- recode(meses_s,
+                  "Enero" = 1,
+                  "Febrero" = 2,
+                  "Marzo" = 3,
+                  "Abril" = 4,
+                  "Mayo" = 5,
+                  "Junio" = 6,
+                  "Julio" = 7,
+                  "Agosto" = 8,
+                  "Septiembre" = 9,
+                  "Octubre" = 10,
+                  "Noviembre" = 11,
+                  "Diciembre" = 12) # Convertir meses a número
+
+fecha_mensual_s <- as.yearmon(paste(años_s, mes_num_s), "%Y %m") # Convertir meses a variable de fecha
+salario_mensual <- zoo(salario_val, order.by = fecha_mensual_s) # Serie mensual del Salario real
+
+salario_trim <- aggregate(salario_mensual,
+                      as.yearqtr,
+                      mean) # Promedio por mes trimestre del Salario real
+
+fechas_q_s <- format(index(salario_trim), "%YQ%q") # Formato de trimestre
+fechas_q_s <- gsub("Q", "T", fechas_q_s)
+
+año_inicio_s <- as.numeric(substr(fechas_q_s[1], 1, 4)) # año de inicio
+trim_inicio_s <- as.numeric(substr(fechas_q_s[1], 6, 6)) # trimestre de inicio
+
+Salario_ts <- ts(as.numeric(salario_trim),
+                 start = c(año_inicio_s, trim_inicio_s),
+                 frequency = 4) # Creamos la serie de tiempo del salario real
+
+grafica_excel(Salario_ts,mostrar_leyenda = F, colores = "red",ancho = 8, alto = 5,y_break_by = 4,date_breaks = "2.5 years", grosor_linea = 0.6, titulo = "Gráfica 7: Salario real", subtitulo = "Índice 2018 = 100", fuente = "Fuente: elaboración propia con datos del INEGI")
+
+```
+
+Con la serie del salario real, podemos graficar las dos series para determinar las diferencias en sus niveles y en la dinámica que siguen. Para este fin, el salario walrasiano, al no ser un índice, debemos convertirlo como tal para realizar las comparaciones.
+
+```{r Comparacion del salario real observado y el salario real estimado, message=FALSE, warning=FALSE}
+
+base_salario <- window(Salario_ts, start = c(2018,1), end = c(2018,1)) # Escogemos el valor base de cada serie del primer trimestre del 2018
+salario_indice <- (Salario_ts / as.numeric(base_salario)) * 100
+
+base_salario_w <- window(series_indice[,5], start = c(2018,1), end = c(2018,1)) # Escogemos el valor base de cada serie del primer trimestre del 2018
+salario_indice_w <- (series_indice[,5] / as.numeric(base_salario_w)) * 100
+
+series_indice <- cbind(
+  PIB     = series_indice[, "PIB"],
+  Empleo  = series_indice[, "Empleo"],
+  Capital = series_indice[, "Capital"],
+  TFP = series_indice[, "TFP"],
+  `Salario walrasiano` = salario_indice_w,
+  `Salario observado` = salario_indice
+  )%>% na.omit(series_indice) # Juntamos el salario real observado con las demas series de tiempo
+
+grafica_excel(series_indice[,5:6], colores = c("red","blue"),ancho = 8, alto = 5,mostrar_leyenda = T, grosor_linea = 0.6,y_break_by = 10, nombres = c("Salario walrasiano", "Salario observado"),date_breaks = "2 years", titulo = "Gráfica 8: Salario real observado y salario real walrasiano estimado", subtitulo = "Índice 2018-IT = 100", fuente = "Fuente: elaboración propia con datos del INEGI")
+
+```
+
+En la gráfica 8 se muestra el salario walrasiano y y el salario observado real. Es fácil ver que, a diferencia del salario walrasiano, el salario real observado sigue una dinámica distinta. En la crisis financiera del 2008, el salario real observado no solo no cayo, sino que ligeramente aumento. Por su parte, en la crisis sanitaria, el salario real disminuyo ligeramente y, a diferencia del salario walrasiano, este aumento de forma constante desde el 2021 hasta 2025. 
+
+En el punto 8. se explicara mas a detalle por que surgen estas diferencias.
+
+#### 7. Compare el salario promedio según el **IMSS** con el salario promedio según la **ENOE** del INEGI.
+\
+
+El salario del IMSS se refiere al salario nominal promedio diario de los trabajadores asegurados del IMSS. Esta serie va desde julio de 2016 hasta diciembre de 2025. Por su parte, el salario de la ENOE se refiere al salario nominal promedio por hora reportado en la ENOE, yendo desde el primer trimestre de 2016 hasta el cuarto trimestre de 2025. Dado que para el caso de la ENOE el salario es el salario promedio por hora, usamos las horas promedio trabajadas a la semana y, suponiendo que se trabaja en promedio 5 días a la semana, el salario diario promedio de la ENOE se calcula como $salario^{ENOE}_t = salario/hora^{ENOE}_t*\frac{horas/semana_t}{5}$
+
+El salario del IMSS tiene periodicidad mensual por lo que, para hacerlo comparable con el salario de la ENOE, y el resto de las variables, lo convertimos en una serie con periodicidad trimestral tomando el promedio de cada trimestre.  
+
+```{r Construccion salario de la ENOE y tratamiento de los datos del salario, message=FALSE, warning=FALSE}
+
+salario_IMSS_raw <- read_excel("Salario_IMSS.xlsx",
+                          col_names = F,
+                          col_types = "text") # base del Salario diario asociado a los trabajadores asegurados en el IMSS
+
+salario_ENOE_raw <- read_excel("Salario_ENOE.xlsx",
+                               col_names = F,
+                               col_types = "text") # base del Salario promedio diario de la ENOE 
+
+salario_IMSS_raw <- salario_IMSS_raw[,colSums(!is.na(salario_IMSS_raw))>0]
+salario_ENOE_raw <- salario_ENOE_raw[,colSums(!is.na(salario_ENOE_raw)) > 0] # borramos NAs
+
+col_años_IMSS <- 1 # Columna donde estan los años
+col_meses_IMSS <- 2 # Columna donde estan los meses
+col_salario_IMSS <- 3 # Columna donde estan los datos del salario del IMSS
+fila_años_ENOE <- 5 # Fila donde estan los años
+fila_trim_ENOE <- 6 # Fila donde estan los trimestres
+fila_salario_ENOE <- 20 # Fila donde estan los datos del salario de la ENOE 
+
+
+años_s_IMSS <- unlist(salario_IMSS_raw[-1,col_años_IMSS]) # Extraemos años, meses y salario del IMSS
+meses_s_IMSS <- unlist(salario_IMSS_raw[-1,col_meses_IMSS])
+salario_IMSS_val <- unlist(salario_IMSS_raw[-1,col_salario_IMSS])
+salario_IMSS_val <- as.numeric(salario_IMSS_val) # Cambiamos el Salario de string a numerico
+
+años_s_ENOE <- unlist(salario_ENOE_raw[fila_años_ENOE,-1]) # Extraemos años, trimestres y salario 
+trim_s_ENOE <- unlist(salario_ENOE_raw[fila_trim_ENOE,-1])
+salario_ENOE_val <- unlist(salario_ENOE_raw[fila_salario_ENOE,-1])
+salario_ENOE_val <- as.numeric(salario_ENOE_val) # Cambiamos el salario de string a numerico
+
+mes_num_s_IMSS <- recode(meses_s_IMSS,
+                    "Enero" = 1,
+                    "Febrero" = 2,
+                    "Marzo" = 3,
+                    "Abril" = 4,
+                    "Mayo" = 5,
+                    "Junio" = 6,
+                    "Julio" = 7,
+                    "Agosto" = 8,
+                    "Septiembre" = 9,
+                    "Octubre" = 10,
+                    "Noviembre" = 11,
+                    "Diciembre" = 12) # Convertir meses a número
+
+trim_num_ENOE <- recode(trim_s_ENOE,
+                   "I" = "1",
+                   "II" = "2",
+                   "III" = "3",
+                   "IV" = "4") # Cambiamos los trimestres de string a numericos
+
+fecha_mensual_s_IMSS <- as.yearmon(paste(años_s_IMSS, mes_num_s_IMSS), "%Y %m") # Convertir meses a variable de fecha
+salario_mensual_IMSS <- zoo(salario_IMSS_val, order.by = fecha_mensual_s_IMSS) # Serie mensual del Salario del IMSS
+salario_trim_IMSS <- aggregate(salario_mensual_IMSS,
+                          as.yearqtr,
+                          mean) # Promedio por mes trimestre del Salario del IMSS
+fechas_q_s_IMSS <- format(index(salario_trim_IMSS), "%YQ%q") # Formato de trimestre
+fechas_q_s_IMSS <- gsub("Q", "T", fechas_q_s_IMSS)
+
+fecha_s_ENOE <- paste0(años_s_ENOE, "T", trim_num_ENOE) # Creamos la variable fecha para la serie de tiempo del Salario de la ENOE
+
+año_inicio_IMSS <- as.numeric(substr(fechas_q_s_IMSS[1], 1, 4)) # año de inicio
+trim_inicio_IMSS <- as.numeric(substr(fechas_q_s_IMSS[1], 6, 6)) # trimestre de inicio
+
+Salario_IMSS_ts <- ts(as.numeric(salario_trim_IMSS),
+                 start = c(año_inicio_IMSS, trim_inicio_IMSS),
+                 frequency = 4) # Creamos la serie de tiempo del salario del IMSS 2016T3-2025T4
+
+año_inicio_ENOE <- as.numeric(años_s_ENOE[1]) # año de inicio 
+trim_inicio_ENOE <- as.numeric(trim_num_ENOE[1]) # trimestre de inicio 
+
+Salario_ENOE_ts <- ts(salario_ENOE_val,
+             start = c(año_inicio_ENOE, trim_inicio_ENOE),
+             frequency =  4) # Serie de tiempo del salario de la ENOE 2016T1 - 2025T4
+
+Salarios_ts <- cbind(
+  IMSS = Salario_IMSS_ts,
+  ENOE = Salario_ENOE_ts
+) %>% na.omit(Salarios_ts)
+```
+
+De igual forma, podemos hacer las comparaciones con los salarios del IMSS y de la ENOE en terminos reales. Para ello, deflactamos los salarios nominales por el INPC correspondiente a cada trimestre como $salario^{real}_{t} = \frac{salario^{nominal}_{t}}{INPC_t}$. 
+
+```{r Construccion salarios reales, message=FALSE, warning=FALSE}
+
+INPC_raw <- read_excel("INPC.xlsx", 
+                       sheet = "INPCT",
+                               col_names = F,
+                               col_types = "text") # base del INPC  
+
+col_años_P <- 1 # Columna donde estan los años
+col_trim_P <- 2 # Columna donde estan los trimestres
+col_P <- 3 # Columna donde estan los datos del INPC
+
+años_P <- unlist(INPC_raw[-1,col_años_P]) # Extraemos años, meses y el INPC
+trim_P <- unlist(INPC_raw[-1,col_trim_P])
+P_val <- unlist(INPC_raw[-1,col_P])
+P_val <- as.numeric(P_val) # Cambiamos el INPC de string a numerico
+
+fecha_P <- paste0(años_P, "T", trim_P)
+
+año_inicio_P <- as.numeric(años_P[1]) # año de inicio 
+trim_inicio_P <- as.numeric(trim_P[1]) # trimestre de inicio 
+
+INPC_ts <- ts(P_val,
+              start = c(año_inicio_P, trim_inicio_P),
+              frequency =  4) # Serie de tiempo del salario del 2008T1 - 2025T4
+
+Salarios_ts <- cbind(
+  IMSS = Salario_IMSS_ts,
+  ENOE = Salario_ENOE_ts,
+  INPC = INPC_ts
+) %>% na.omit(Salarios_ts)
+
+Salarios_ts <- cbind(
+  IMSS = Salario_IMSS_ts,
+  ENOE = Salario_ENOE_ts,
+  INPC = INPC_ts,
+  `IMSS real` = Salario_IMSS_ts/INPC_ts,
+  `ENOE real` = Salario_ENOE_ts/INPC_ts
+) %>% na.omit(Salarios_ts)
+```
+
+```{r Comparacion salarios IMSS y ENOE, message=FALSE, warning=FALSE}
+
+grafica_excel(Salarios_ts[,1:2], colores = c("red","blue"),ancho = 8, alto = 5,mostrar_leyenda = T, y_break_by = 50,date_breaks = "1 years", grosor_linea = 0.6, titulo = "Gráfica 9: Salario diario nominal promedio de los asegurados del IMSS y de la ENOE", subtitulo = "Pesos por día", nota = "Nota: para el dato del salario promedio del segundo trimestre de 2020, se usa la ETOE.", fuente = "Fuente: elaboración propia con datos del IMSS y la ENOE (INEGI)")
+
+grafica_excel(Salarios_ts[,4:5], colores = c("red","blue"),ancho = 8, alto = 5,mostrar_leyenda = T, y_break_by = 0.5,date_breaks = "1 years", grosor_linea = 0.6,nombres = c("IMSS","ENOE"), titulo = "Gráfica 10: Salario diario real promedio de los asegurados del IMSS y de la ENOE", nota = "Nota: para el dato del salario promedio del segundo trimestre de 2020, se usa la ETOE.", fuente = "Fuente: elaboración propia con datos del IMSS y la ENOE (INEGI)")
+```
+
+En la gráfica 9 y 10,vemos que ambos salarios siguen una dinámica similar, ambos aumentan a lo largo del tiempo. Sin embargo, estos difieren en el nivel en el que se encuentran. El salario del IMSS es notoriamente mayor que el salario que se reporta en la ENOE. Al ser ambos salarios observados, esta diferencia se explica por la distribucion de personas que se reportan en ambos casos. Para el caso del IMSS, se refiere al salario de las personas aseguradas en el IMSS, o sea, gente en su gran mayoria parte del sector formal. Por su parte, la ENOE, al ser mas general, contiene personas en ambos sectores. Entonces, el salario del IMSS resulta ser mas alto pues contiene en su mayoria a personas del sector formal, que contiene un gran numero de trabajadores con una mayor productividad relativa a los trabajadores del sector informal. 
+
+#### 8. Interprete.
+\
+
+Al igual que se realizó la comparación del salario real walrasiano con el salario real observado, el mismo ejercicio se puede hacer con respecto a los salarios reales según el IMSS y la ENOE. Para este fin, se construyen índices de los salarios reales del IMSS y la ENOE con base en el primer trimestre de 2018.  
+
+```{r Construccion indices de los salarios reales, message=FALSE, warning=FALSE}
+
+# Calculamos los indices al primer trimestre de 2018
+
+base_IMSSr <- window(Salarios_ts[,4], start = c(2018,1), end = c(2018,1)) # Escogemos el valor base de cada serie del primer trimestre del 2018
+base_ENOEr <- window(Salarios_ts[,5], start = c(2018,1), end = c(2018,1))
+IMSSr_indice <- (Salarios_ts[,4]/ as.numeric(base_IMSSr)) * 100
+ENOEr_indice <- (Salarios_ts[,5]/ as.numeric(base_ENOEr)) * 100
+
+series_indice <- cbind(
+  PIB     = series_indice[, "PIB"],
+  Empleo  = series_indice[, "Empleo"],
+  Capital = series_indice[, "Capital"],
+  TFP = series_indice[, "TFP"],
+  `Salario walrasiano` = series_indice[,"Salario walrasiano"],
+  `Salario observado` = series_indice[,"Salario observado"],
+  `IMSS real` = IMSSr_indice,
+  `ENOE real` = ENOEr_indice
+)%>% na.omit(series_indice) # Juntamos los indices
+
+grafica_excel(series_indice[,5:8], colores = c("red","blue","#2CA02C","#FF7F0E"),ancho = 8, alto = 5,mostrar_leyenda = T, grosor_linea = 0.6,y_break_by = 10,date_breaks = "1 years", posicion_leyenda = c(0.2,0.8), nombres = c("Salario walrasiano", "Salario observado", "IMSS", "ENOE"), titulo = "Gráfica 11: Salario real observado y salario real walrasiano estimado", subtitulo = "Índice 2018-IT = 100", fuente = "Fuente: elaboración propia con datos del INEGI")
+
+```
+
+Las diferencias entre el salario real observado y el contrafactual surgen desde dos perspectivas, una teórica y otra empírica. En el frente teórico, por una parte, el modelo emplea una función de producción Cobb-Douglas con parámetros específicos para la distribución del ingreso marginal entre salario y capital, que pueden o no reflejar adecuadamente la realidad de México. De igual forma, el mercado laboral se supone perfectamente competitivo, pues el salario es igual al ingreso marginal del trabajo. En cuanto al supuesto de la estructura de la función de producción, si tomáramos este supuesto como correcto, la diferencia que se observa entre el salario real estimado y el observado se puede explicar con un modelo de salarios de eficiencia, donde las empresas obtienen mayores beneficios pagando salarios más altos que el salario de equilibrio de un mercado laboral competitivo. 
+
+Otra justificación para esta diferencia recae en la existencia de un mercado laboral dual, es decir, un sector formal e informal. El tamaño potencial del mercado laboral informal es tal que no tiene límite. Es decir, la informalidad puede crecer indefinidamente sin que se observe una disminución en los beneficios de sus participantes. Por una parte, el sector informalse absorben los trabajadores con una baja productividad laboral,mientras que en el sector formal, hay muchos trabajadores productivos por lo que hay salarios mucho mas altos. Esto genera un salario real observado mayor al salario walrasiano porque la informalidad introduce heterogeneidad en productividad y porque en el sector formal, el salario incluye rentas institucionales. 
+
+Con estos supuestos, la diferencia entre el salario walrasiano y el observado se puede explicar como un incentivo ofrecido por las empresas para que los trabajadores permanezcan en el mercado formal y sean productivos dentro de las empresas (o visto desde un punto de vista teórico, para que no holgazaneen). Si no existiese este incentivo, los trabajadores podrían pasar eventualmente al mercado informal creando una fuerte restricción de oferta de trabajo en el mercado formal y elevando aún más los salarios de eficiencia. Para que este modelo tenga sentido completo sería necesario explicar también los incentivos por los cuales los trabajadores pasarían al mercado informal. Algunos de estos incentivos podrían ser, por ejemplo, el disfrute de una menor supervisión o condiciones de trabajo menos rígidas. 
+
+Estas dos ideas justifican el hecho de observar un salario mayor al que se esperaría si el mercado laboral fuese perfectamente competitivo, y en ese sentido explican parte de las rigideces de salarios en México.
+
+
+
+
+
+
+
+
+
